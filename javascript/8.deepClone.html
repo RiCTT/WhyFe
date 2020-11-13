@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>深浅拷贝</title>
+</head>
+<body>
+  <script>
+    /**
+      一、什么是深浅拷贝
+        是指我们在复制一个数据的时候，复制的是值本身，还是值的引用。在工作中我们都会遇到函数参数传递，遍历
+        数组得到一个新数组等。比如
+       let obj = { value: 1 }
+       let arr = [1, 2, 3, obj]
+       let arr2 = arr
+       arr[3].value = 1234
+       console.log(arr2[3])
+       
+      二、常见浅拷贝
+        let b = Object.assign(targetObj, resourceObj) —— 返回一个新对象
+        let a = arr.concat([]) —— 拼接返回一个新数组
+        let arr = [...[obj, 12, 3]] —— es6中拓展运算符
+        ....
+        当我们修改其中一个引用值，对应其他保存着该引用地址的变量也会跟着变化，进而引发其他不可控的故障
+       
+      三、实现一个深拷贝
+      版本一
+        问题1：当对象存在循环引用的时候，会执行栈调用溢出
+          let obj = { value: 123 }
+          let a = { b: obj }
+          let c = { c: a}
+          obj.a = a
+          let bbb = deepClone(obj)
+        问题2：没有处理函数、正则、map对象等情况
+      function deepClone(obj) { 
+        let result
+        if (isArray(obj)) {
+          result = []
+          obj.forEach(item => {
+            result.push(deepClone(item))
+          })
+        }
+        if (isObject(obj)) {
+          result = {}
+          Object.keys(obj).forEach(key => {
+            result[key] = deepClone(obj[key])
+          })
+        } else {
+          result = obj
+        }
+        return result
+      }
+      版本二：常用解决循环引用
+        - 使用obj对象，来保存key value（不行，key难以确定，只能通过循环来找值相等
+        - 使用数组来保存，同样的问题，需要通过循环来找值
+        - 使用map，满足场景，可以使用对象/函数作为key，但是有缺点
+          - 1、map的操作规则，map用两个数组分别保存键、值，当get(key)的时候，要去遍历键的数组拿到index，再从值数组去拿对应key的值
+            赋值跟搜索都是，时间复杂度上为O(n)
+          - 2、可能导致内存泄漏，数组一直引用着每个键和值，而这个数组又被map的操作方法引用着，比如map.get，导致垃圾回收算法不能回收
+            ，即使没有其他任何引用存在了
+          
+          function deepClone(obj, cache = new Map()) {
+            let result
+
+            if (cache.get(obj)) return cache.get(obj)
+
+            if (isArray(obj)) {
+              result = []
+              cache.set(obj, result)
+              obj.forEach(item => {
+                result.push(deepClone(item, cache))
+              })
+            }
+            if (isObject(obj)) {
+              result = {}
+              cache.set(obj, result)
+              Object.keys(obj).forEach(key => {
+                result[key] = deepClone(obj[key], cache)
+              })
+            } else {
+              result = obj
+            }
+            
+            return result
+          }
+
+      版本三：解决map的性能问题（内存泄露，时间复杂度）
+          - 相比较map，weakMap持有的是每个键对象的弱引用，当没有其他引用存在时垃圾回收才能正确进行
+          - 当然，因为key不确定（随时会被回收），weakmap是不能被枚举的，值列表受回收机制的影响
+           function deepClone(obj, cache = new WeakMap()) {
+            if (cache.has(obj)) return cache.get(obj)
+
+      版本四：clone Date、Regexp等对象
+     */
+
+    function isArray(value) {
+      return Object.prototype.toString.call(value) === '[object Array]'
+    }
+    
+    function isObject(value) {
+      return Object.prototype.toString.call(value) === '[object Object]'
+    }
+
+    function deepClone(obj, cache = new WeakMap()) {
+      if (!(obj instanceof Object)) return obj
+      if (obj instanceof Date) return new Date(obj)
+      if (obj instanceof RegExp) return new RegExp(obj.source, obj.flags)
+      if (obj instanceof Map) {
+        const map = new Map()
+        map.forEach((value, key) => {
+          map.set(key, deepClone(value))
+        })
+        return map
+      }
+
+
+      if (cache.has(obj)) return cache.get(obj)
+      let result = isArray(obj) ? [] : {}
+      Object.keys(obj).forEach(key => {
+        if (obj.hasOwnProperty(key)) {
+          if (obj[key] && typeof obj[key] === 'object') {
+            result[key] = deepClone(obj[key], cache)
+          } else {
+            result[key] = obj[key]
+          }
+        }
+      })
+      // if (isArray(obj)) {
+      //   result = []
+      //   cache.set(obj, result)
+      //   obj.forEach(item => {
+      //     result.push(deepClone(item, cache))
+      //   })
+      // }
+      // if (isObject(obj)) {
+      //   result = {}
+      //   cache.set(obj, result)
+      //   Object.keys(obj).forEach(key => {
+      //     result[key] = deepClone(obj[key], cache)
+      //   })
+      // } else {
+      //   result = obj
+      // }
+      return result
+    }
+  </script>
+</body>
+</html>
